@@ -1,6 +1,6 @@
 # 二维凸包演示
 
-打开 `Assets/Scenes/ConvexHullDemo.unity`，按 Play 运行。初始示例为 12 个点、6 个凸包顶点，面积为 45。
+打开 `Assets/Scenes/ConvexHullDemo.unity`，按 Play 运行。默认首先打开操作说明，点击右上角 × 关闭；左下角 ? 可随时重开。勾选“不再显示”会保存本地偏好并禁止下次进入时自动弹出；重新打开说明并取消勾选可恢复。初始示例为 12 个点、6 个凸包顶点，面积为 45。
 
 ## 操作
 
@@ -11,9 +11,9 @@
 - 新建点使用打开菜单时记录的世界坐标。重合点允许存在；优先命中选中点，否则同位置优先命中最后创建的点。
 - 菜单操作后关闭；Escape、菜单外单击也可关闭。菜单外左键仍可正常开始画布操作。
 - 随机点数：输入 1–1000 的整数，点击“随机生成”，替换原有点集并在当前可见画布内生成新点。
-- “清空点集”移除所有点。清空和随机替换保留相机位置；无效输入保留现有点集并显示提示。
+- “清空点集”移除所有点。清空和随机替换保留相机位置；无效输入保留现有点集，数量输入框标红。
 
-蓝色点为凸包顶点，灰色点为内部点，橙色圈为当前选择。边上共线的非端点不计入凸包顶点。两个点或全共线点集显示线段，面积为零。无滚轮缩放。
+蓝色点为凸包顶点，灰色点为内部点，橙色圈为当前选择。边上共线的非端点不计入凸包顶点。两个点或全共线点集显示线段，面积为零。滚轮向上放大、向下缩小，以鼠标位置为中心；鼠标在 UI 上、说明弹窗打开或正在左键拖动时不执行缩放。
 
 ## 结构与调整
 
@@ -21,9 +21,9 @@
 
 `ConvexHullDemoController` 管理稳定点标识、鼠标手势、点对象池及变更事件。修改点集后每帧统一刷新；平移相机不会重新计算凸包。`InfiniteGrid` 仅重建可见网格。新点、填充网格与网格变化属于演示的运行时数据；场景、Prefab、材质与 UISetting 均已在编辑器中制作并保存。
 
-在场景的 `Convex Hull Demo` 对象上调整颜色、点尺寸、轮廓宽度、10 像素命中半径、4 像素拖动阈值及初始点集。在 `Infinite coordinate grid` 上调整网格间距及配色。
+在场景的 `Convex Hull Demo` 对象上调整颜色、世界单位点直径（Point Diameter，默认 0.3）、世界单位轮廓宽度（Outline Width，默认 0.04）、世界单位命中半径（Hit Radius，默认 0.24）、4 像素拖动阈值及初始点集。Zoom 分组中的 Min Zoom Size / Max Zoom Size 限定正交相机投影大小（默认 1–30，数值越小画布放得越大）；Zoom Speed 控制滚轮速度。在 `Infinite coordinate grid` 上调整网格间距、世界单位线宽（Line Width，默认 0.01）及配色。点直径修改会同步更新编辑器中的初始点预览。点、选中圈、凸包和网格尺寸不再从客户端像素反算。窗口变化只改变可见范围和渲染分辨率；滚轮缩放调整相机投影大小，点的世界尺寸保持不变。
 
-UI 沿用 UIFramework 示例的 `UISetting.CreateUIInstance`、`UIFrame.ShowPanel`、`PanelController` 和 URP 叠加相机。工具栏和菜单 Prefab 位于 `Assets/ConvexHullDemo/Prefabs`，框架示例未修改。
+UI 沿用 UIFramework 示例的 `UISetting.CreateUIInstance`、`UIFrame.ShowPanel`、`PanelController` 和 URP 叠加相机。工具栏仅保留三项统计、随机数量和两个按钮，尺寸为 900×64；右键菜单宽 160。说明使用 HullHelpPanel，通过 PlayerPrefs 保存偏好。工具栏、菜单和说明 Prefab 位于 `Assets/ConvexHullDemo/Prefabs`，框架示例未修改。HullUIFrame 的 CanvasScaler 使用 1280×720 参考分辨率、Scale With Screen Size / Expand；所有 UI 使用固定设计尺寸并统一等比适配，宽窄窗口均能容纳完整布局。
 
 ## 验证
 
@@ -36,3 +36,13 @@ UI 沿用 UIFramework 示例的 `UISetting.CreateUIInstance`、`UIFrame.ShowPane
 已验证 1280×720 与 800×900 的 Game View。截图保存在 `Assets/Screenshots`。未构建 Player。
 
 `AgentScripts/BuildConvexHullDemo.cs` 是 Pipeline 资产制作脚本，拒绝覆盖已有演示场景或丢弃任何未保存场景。
+
+## UI 更新验证
+
+`AgentScripts/CompactHullUI.cs` 的 `CompactHullUI.Apply` 在编辑器中保存紧凑 UI 和点尺寸（只对已保存的演示场景执行）。若从零重建，先执行初始制作脚本，再执行此更新脚本，最后进入 Play Mode。
+
+`AgentScripts/VerifyCompactHullUI.cs` 的 `VerifyCompactHullUI.Run` 在 Play Mode 聚焦 Game View 后验证叉号、问号、复选框、偏好保存与恢复、说明遮挡、工具栏和右键菜单尺寸及点的配置世界直径；会恢复测试前的偏好。说明与问号、叉号和复选框使用现有 UI 控件及字体制作，无需另外寻找素材。
+
+`AgentScripts/ConfigureHullSizes.cs` 保存世界单位尺寸与 UI 参考分辨率；`VerifyHullSizes.Check` 在不同 Game View 分辨率下验证世界尺寸、线宽、世界命中范围和 UI 等比适配，并验证运行时修改点直径。
+
+演示 UI 字体统一使用 `Fonts/GenSenRounded2-M.ttc`。`AgentScripts/UpdateHullFontZoom.cs` 用于在编辑器替换字体和更新说明；`VerifyHullFontZoom.Run` 验证缩放边界、鼠标锚定、UI 隔离及缩放后的命中和拖动。

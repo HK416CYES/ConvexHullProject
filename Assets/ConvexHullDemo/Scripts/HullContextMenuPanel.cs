@@ -5,11 +5,10 @@ using UnityEngine.UI;
 namespace ConvexHullDemo {
     public sealed class HullContextMenuPanel : PanelController {
         public Button createButton, deleteButton;
-        public Text coordinateLabel;
+        
         private ConvexHullDemoController demo;
         private Camera uiCamera;
         private Vector2 anchorScreen;
-        private Rect lastScreen;
         public bool HasDelete => deleteButton.gameObject.activeSelf;
         public void Bind(ConvexHullDemoController controller, Camera camera) { demo = controller; uiCamera = camera; }
         protected override void AddListeners() {
@@ -23,9 +22,7 @@ namespace ConvexHullDemo {
         public void Configure(Vector2 screen, bool canDelete) {
             anchorScreen = screen; deleteButton.gameObject.SetActive(canDelete);
             var rect = (RectTransform)transform;
-            rect.sizeDelta = new Vector2(230, canDelete ? 142 : 98);
-            Vector2 world = demo.ScreenToWorld(screen);
-            coordinateLabel.text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "位置  ({0:0.00}, {1:0.00})", world.x, world.y);
+            rect.sizeDelta = new Vector2(160, canDelete ? 72 : 38);
         }
         protected override void HierarchyFixOnShow() { transform.SetAsLastSibling(); }
         public void PositionAt(Vector2 screen) {
@@ -39,9 +36,8 @@ namespace ConvexHullDemo {
             Vector2 local;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, new Vector2(x, y), uiCamera, out local);
             rect.anchoredPosition = local - parent.rect.min;
-            lastScreen = viewport;
         }
-        private void LateUpdate() { if (demo != null && lastScreen != demo.worldCamera.pixelRect) PositionAt(anchorScreen); }
+        private void LateUpdate() { if (demo != null) PositionAt(anchorScreen); }
         public bool Contains(Vector2 screen) => RectTransformUtility.RectangleContainsScreenPoint((RectTransform)transform, screen, uiCamera);
     }
 }

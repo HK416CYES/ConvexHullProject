@@ -9,8 +9,10 @@ namespace ConvexHullDemo {
         public Color minorColor = new Color(.86f, .89f, .92f, 1);
         public Color majorColor = new Color(.75f, .81f, .87f, 1);
         public Color axisColor = new Color(.49f, .59f, .69f, 1);
-        public float spacing = 1;
-        public float linePixels = .7f;
+        [Min(.01f)] public float spacing = 1;
+        [Min(.001f), Tooltip("Grid line width in world units.")] public float lineWidth = .01f;
+        private float lastSpacing, lastWidth;
+        private Color lastMinor, lastMajor, lastAxis;
         private Mesh mesh;
         private Vector3 lastPosition;
         private Rect lastRect;
@@ -23,20 +25,23 @@ namespace ConvexHullDemo {
         }
         private void LateUpdate() {
             if (worldCamera.transform.position == lastPosition && lastRect == worldCamera.pixelRect &&
-                lastSize == worldCamera.orthographicSize) return;
+                lastSize == worldCamera.orthographicSize && lastSpacing == spacing && lastWidth == lineWidth &&
+                lastMinor == minorColor && lastMajor == majorColor && lastAxis == axisColor) return;
             lastPosition = worldCamera.transform.position;
             lastRect = worldCamera.pixelRect;
             lastSize = worldCamera.orthographicSize;
+            lastSpacing = spacing; lastWidth = lineWidth;
+            lastMinor = minorColor; lastMajor = majorColor; lastAxis = axisColor;
             transform.position = new Vector3(lastPosition.x, lastPosition.y, .4f);
-            Rebuild(mesh, worldCamera, spacing, linePixels, minorColor, majorColor, axisColor);
+            Rebuild(mesh, worldCamera, spacing, lineWidth, minorColor, majorColor, axisColor);
         }
-        public static void Rebuild(Mesh target, Camera camera, float spacing, float pixels,
+        public static void Rebuild(Mesh target, Camera camera, float spacing, float lineWidth,
             Color minor, Color major, Color axis) {
             float halfY = camera.orthographicSize, halfX = halfY * camera.aspect;
             var center = camera.transform.position;
             float minX = center.x - halfX - 1, maxX = center.x + halfX + 1;
             float minY = center.y - halfY - 1, maxY = center.y + halfY + 1;
-            float width = 2 * halfY / Mathf.Max(1, camera.pixelHeight) * pixels;
+            float width = Mathf.Max(.001f, lineWidth);
             float step = Mathf.Max(.01f, spacing);
             // Prevent excessive mesh sizes when an inspector-configured camera spans a very large range.
             while ((maxX - minX + maxY - minY) / step > 400) step *= 10;

@@ -11,6 +11,7 @@ namespace ConvexHullDemo {
     public sealed class ConvexHullDemoController : MonoBehaviour {
         public const string ToolbarId = "HullToolbar";
         public const string MenuId = "HullContextMenu";
+        public const string HelpId = "HullHelp";
         [Header("Scene references")]
         public Camera worldCamera;
         public UISetting uiSetting;
@@ -25,11 +26,21 @@ namespace ConvexHullDemo {
         public Color hullColor = new Color(.10f, .38f, .80f, 1);
         public Color selectionColor = new Color(.95f, .53f, .12f, 1);
         public Color fillColor = new Color(.18f, .49f, .93f, .12f);
-        public float pointDiameterPixels = 12;
-        public float outlinePixels = 2.5f;
+        [Min(.01f), Tooltip("Point diameter in world units; independent of screen resolution.")]
+        public float pointDiameter = .3f;
+        [Min(.001f), Tooltip("Hull outline width in world units.")]
+        public float outlineWidth = .04f;
         [Header("Interaction")]
-        public float hitRadiusPixels = 10;
+        [Min(.01f), Tooltip("Hit radius in world units; never smaller than the visible point radius.")]
+        public float hitRadius = .24f;
         public float dragThresholdPixels = 4;
+        [Header("Zoom (orthographic size in world units)")]
+        [Min(.01f), Tooltip("Minimum orthographic size: smallest visible range / maximum magnification.")]
+        public float minZoomSize = 1;
+        [Min(.01f), Tooltip("Maximum orthographic size: largest visible range / minimum magnification.")]
+        public float maxZoomSize = 30;
+        [Min(.001f), Tooltip("Exponential zoom speed per 120 scroll units (one mouse wheel step).")]
+        public float zoomSpeed = .15f;
         public Vector2[] initialPoints = {
             new Vector2(-5,-2), new Vector2(-4,2), new Vector2(0,3), new Vector2(4,2),
             new Vector2(5,-2), new Vector2(1,-3), new Vector2(-2,-1), new Vector2(0,1),
@@ -50,6 +61,7 @@ namespace ConvexHullDemo {
         private UIFrame frame;
         private HullToolbarPanel toolbar;
         private HullContextMenuPanel menu;
+        private HullHelpPanel help;
         private int nextId = 1;
         private int? selection;
         private bool dirty = true;
@@ -68,9 +80,12 @@ namespace ConvexHullDemo {
         public int HullRevision { get; private set; }
         public HullToolbarPanel Toolbar => toolbar;
         public HullContextMenuPanel Menu => menu;
+        public HullHelpPanel Help => help;
+        public bool IsHelpOpen => help != null && help.gameObject.activeSelf;
         public bool IsMenuOpen => menu != null && menu.gameObject.activeSelf;
 
         private void Awake() {
+            worldCamera.orthographicSize = Mathf.Clamp(worldCamera.orthographicSize, minZoomSize, maxZoomSize);
             fillMesh = new Mesh { name = "Convex hull fill (runtime)" };
             fillMesh.MarkDynamic(); fill.sharedMesh = fillMesh;
             foreach (var view in previewPoints) {
@@ -83,13 +98,15 @@ namespace ConvexHullDemo {
             frame = uiSetting.CreateUIInstance();
             toolbar = frame.GetComponentInChildren<HullToolbarPanel>(true);
             menu = frame.GetComponentInChildren<HullContextMenuPanel>(true);
-            toolbar.Bind(this); menu.Bind(this, frame.UICamera);
+            help = frame.GetComponentInChildren<HullHelpPanel>(true);
+            toolbar.Bind(this); menu.Bind(this, frame.UICamera); help.Bind(this);
             frame.ShowPanel(ToolbarId); toolbar.Refresh();
+            if (HullHelpPanel.ShouldShowOnEntry) ShowHelp();
         }
 
         private void Update() {
             var mouse = Mouse.current;
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) CloseMenu();
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { if (IsHelpOpen) HideHelp(); else CloseMenu(); }
             if (mouse == null) return;
             Vector2 screen = mouse.position.ReadValue();
             if (mouse.rightButton.wasPressedThisFrame) {
@@ -98,12 +115,26 @@ namespace ConvexHullDemo {
             if (mouse.leftButton.wasPressedThisFrame) BeginLeft(screen);
             if (mouse.leftButton.isPressed) MoveLeft(screen);
             if (mouse.leftButton.wasReleasedThisFrame) EndLeft(screen);
+            Zoom(screen, mouse.scroll.ReadValue().y);
         }
         private void LateUpdate() {
             FlushChanges();
-            float unit = 2 * worldCamera.orthographicSize / Mathf.Max(1, worldCamera.pixelHeight);
-            outline.widthMultiplier = outlinePixels * unit;
-            foreach (var p in points) p.View.transform.localScale = Vector3.one * pointDiameterPixels * unit * .5f;
+            ApplyVisualSizes();
+        }
+
+        /// <summary>Positive wheel input zooms in around the cursor; UI and active drags consume the gesture.</summary>
+        public void Zoom(Vector2 screen, float scrollDelta) {
+            if (scrollDelta == 0 || float.IsNaN(scrollDelta) || float.IsInfinity(scrollDelta) ||
+                leftActive || IsHelpOpen || !worldCamera.pixelRect.Contains(screen) || PointerOverUI(screen)) return;
+            float minimum = Mathf.Max(.01f, minZoomSize), maximum = Mathf.Max(minimum, maxZoomSize);
+            float factor = Mathf.Exp(-Mathf.Clamp(scrollDelta / 120f, -100, 100) * Mathf.Clamp(zoomSpeed, .001f, 1));
+            float size = Mathf.Clamp(worldCamera.orthographicSize * factor, minimum, maximum);
+            if (Mathf.Approximately(size, worldCamera.orthographicSize)) return;
+            Vector2 before = ScreenToWorld(screen);
+            worldCamera.orthographicSize = size;
+            Vector2 offset = before - ScreenToWorld(screen);
+            worldCamera.transform.position += new Vector3(offset.x, offset.y, 0);
+            CloseMenu();
         }
 
         public Vector2 ScreenToWorld(Vector2 screen) {
@@ -118,11 +149,12 @@ namespace ConvexHullDemo {
         }
         public int? HitTest(Vector2 screen) {
             int? found = null;
-            float best = hitRadiusPixels * hitRadiusPixels;
+            Vector2 world = ScreenToWorld(screen);
+            float radius = Mathf.Max(hitRadius, pointDiameter * .5f);
+            float best = radius * radius;
             foreach (var p in points) {
-                Vector2 projected = worldCamera.WorldToScreenPoint(p.Position);
-                float distance = (projected - screen).sqrMagnitude;
-                if (distance > hitRadiusPixels * hitRadiusPixels) continue;
+                float distance = (p.Position - world).sqrMagnitude;
+                if (distance > radius * radius) continue;
                 if (p.Id == selection) return p.Id;
                 if (distance <= best) { best = distance; found = p.Id; }
             }
@@ -169,6 +201,11 @@ namespace ConvexHullDemo {
             frame.ShowPanel(MenuId);
             menu.PositionAt(screen);
         }
+        public void ShowHelp() {
+            CloseMenu(); CancelGesture();
+            help.SyncPreference(); frame.ShowPanel(HelpId);
+        }
+        public void HideHelp() { if (frame != null && IsHelpOpen) frame.HidePanel(HelpId); }
         public void CloseMenu() { if (frame != null && IsMenuOpen) frame.HidePanel(MenuId); }
         public void CreateContextPoint() {
             var point = AddPoint(contextWorld); Select(point.Id); CloseMenu();
@@ -185,6 +222,7 @@ namespace ConvexHullDemo {
             var point = new Point { Id = nextId++, Position = position, View = view };
             view.name = "Point " + point.Id;
             view.transform.position = new Vector3(position.x, position.y, -.05f);
+            view.transform.localScale = Vector3.one * pointDiameter * .5f;
             points.Add(point); dirty = true;
             return point;
         }
@@ -224,7 +262,7 @@ namespace ConvexHullDemo {
             Rect visible = worldCamera.pixelRect;
             float bottom = visible.yMin + 24, top = visible.yMax - 24;
             if (toolbar != null) {
-                bottom = Mathf.Max(bottom, toolbar.FooterScreenTop + 24);
+                bottom = Mathf.Max(bottom, toolbar.HelpButtonScreenTop + 24);
                 top = Mathf.Min(top, toolbar.ToolbarScreenBottom - 24);
             }
             return Rect.MinMaxRect(visible.xMin + 24, bottom, visible.xMax - 24, top);
@@ -258,6 +296,22 @@ namespace ConvexHullDemo {
         }
         private void UpdatePointAppearance() {
             foreach (var p in points) p.View.SetAppearance(hullPositions.Contains(p.Position) ? hullColor : innerColor, selectionColor, p.Id == selection);
+        }
+        public void ApplyVisualSizes() {
+            if (outline != null) outline.widthMultiplier = outlineWidth;
+            foreach (var p in points) p.View.transform.localScale = Vector3.one * pointDiameter * .5f;
+            if (!Application.isPlaying)
+                foreach (var view in previewPoints)
+                    if (view != null) view.transform.localScale = Vector3.one * pointDiameter * .5f;
+        }
+        private void OnValidate() {
+            pointDiameter = Mathf.Max(.01f, pointDiameter);
+            outlineWidth = Mathf.Max(.001f, outlineWidth);
+            hitRadius = Mathf.Max(.01f, hitRadius);
+            minZoomSize = Mathf.Max(.01f, minZoomSize);
+            maxZoomSize = Mathf.Max(minZoomSize, maxZoomSize);
+            zoomSpeed = Mathf.Clamp(zoomSpeed, .001f, 1);
+            ApplyVisualSizes();
         }
         private void OnDestroy() {
             if (frame != null) {

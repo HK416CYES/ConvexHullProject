@@ -27,7 +27,7 @@ public static class BuildConvexHullDemo {
         if (AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scenes/ConvexHullDemo.unity") != null)
             throw new InvalidOperationException("Demo scene already exists; refusing to overwrite.");
         Folder(Root); Folder(Root + "/Materials"); Folder(Root + "/Meshes"); Folder(Root + "/Prefabs");
-        font = AssetDatabase.LoadAssetAtPath<Font>(Root + "/Fonts/ArialUnicode.ttf");
+        font = AssetDatabase.LoadAssetAtPath<Font>(Root + "/Fonts/GenSenRounded2-M.ttc");
         if (font == null) throw new Exception("Chinese font has not been imported.");
         var shader = Shader.Find("ConvexHullDemo/CanvasUnlit");
         if (shader == null || !shader.isSupported) throw new Exception("Canvas shader unavailable.");
@@ -96,7 +96,7 @@ public static class BuildConvexHullDemo {
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(pointAsset, scene);
             instance.name = "Initial point " + demo.previewPoints.Count;
             instance.transform.SetParent(demo.pointsRoot); instance.transform.position = new Vector3(position.x, position.y, -.05f);
-            instance.transform.localScale = Vector3.one * .085f;
+            instance.transform.localScale = Vector3.one * demo.pointDiameter * .5f;
             var view = instance.GetComponent<HullPointView>();
             view.SetAppearance(hullSet.Contains(position) ? demo.hullColor : demo.innerColor, demo.selectionColor, false);
             demo.previewPoints.Add(view);
@@ -107,7 +107,7 @@ public static class BuildConvexHullDemo {
         var renderer = gridGO.AddComponent<MeshRenderer>(); renderer.sharedMaterial = gridMaterial;
         renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.receiveShadows = false;
         var gridMesh = new Mesh { name = "Initial grid" };
-        InfiniteGrid.Rebuild(gridMesh, camera, grid.spacing, grid.linePixels, grid.minorColor, grid.majorColor, grid.axisColor);
+        InfiniteGrid.Rebuild(gridMesh, camera, grid.spacing, grid.lineWidth, grid.minorColor, grid.majorColor, grid.axisColor);
         AssetDatabase.CreateAsset(gridMesh, Root + "/Meshes/InitialGrid.asset"); grid.meshFilter.sharedMesh = gridMesh;
         gridGO.transform.position = new Vector3(0,.7f,.4f);
         EditorSceneManager.MarkSceneDirty(scene);
@@ -123,7 +123,7 @@ public static class BuildConvexHullDemo {
         try {
             root.name = "HullUIFrame"; root.transform.localScale = Vector3.one;
             var canvas = root.GetComponent<Canvas>(); canvas.planeDistance = 10;
-            var scaler = root.GetComponent<CanvasScaler>(); scaler.referenceResolution = new Vector2(1280,800); scaler.matchWidthOrHeight = 0;
+            var scaler = root.GetComponent<CanvasScaler>(); scaler.referenceResolution = new Vector2(1280,720); scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
             var camera = canvas.worldCamera; camera.nearClipPlane = .1f; camera.farClipPlane = 50; camera.allowHDR = false;
             camera.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
             var eventSystem = root.GetComponentInChildren<EventSystem>(true);
@@ -158,9 +158,9 @@ public static class BuildConvexHullDemo {
         panel.clearButton = Button("Clear",top,"清空点集",996,135,166,34,new Color(.92f,.95f,.98f),Ink);
         var footer = RectGO("Footer",root); footer.anchorMin = Vector2.zero; footer.anchorMax = new Vector2(1,0);
         footer.pivot = new Vector2(.5f,0); footer.sizeDelta = new Vector2(0,76); footer.anchoredPosition = Vector2.zero;
-        Image(footer,new Color(1,1,1,.97f)); panel.footerRect = footer;
+        Image(footer,new Color(1,1,1,.97f));
         Text("Instructions",footer,"左键单击选点  ·  拖动已选中的点移动点  ·  其他位置左键拖动画布  ·  右键打开菜单",32,10,1216,24,15,Ink);
-        panel.status = Text("Status",footer,"蓝色：凸包顶点    灰色：内部点    橙色外圈：选中点",32,40,1216,22,13,Muted);
+        Text("Status",footer,"蓝色：凸包顶点    灰色：内部点    橙色外圈：选中点",32,40,1216,22,13,Muted);
         var asset = PrefabUtility.SaveAsPrefabAsset(root.gameObject,Root + "/Prefabs/" + ConvexHullDemoController.ToolbarId + ".prefab");
         Object.DestroyImmediate(root.gameObject); return asset;
     }
@@ -170,7 +170,7 @@ public static class BuildConvexHullDemo {
         Image(root,Color.white);
         var edge = root.gameObject.AddComponent<UnityEngine.UI.Outline>(); edge.effectColor = new Color(.65f,.73f,.83f,.6f); edge.effectDistance = new Vector2(1,-1);
         var panel = root.gameObject.AddComponent<HullContextMenuPanel>();
-        panel.coordinateLabel = Text("Coordinates",root,"位置  (0.00, 0.00)",12,6,206,26,13,Muted);
+        Text("Coordinates",root,"位置  (0.00, 0.00)",12,6,206,26,13,Muted);
         Box("Divider",root,12,36,206,1,new Color(.88f,.91f,.95f));
         panel.createButton = Button("Create",root,"＋  新建点",10,43,210,40,new Color(.93f,.96f,1),Blue);
         panel.deleteButton = Button("Delete",root,"－  删除点",10,87,210,40,new Color(1,.95f,.94f),new Color(.77f,.24f,.18f));
@@ -257,7 +257,7 @@ public static class BuildConvexHullDemo {
         var demo=Object.FindFirstObjectByType<ConvexHullDemoController>();
         demo.worldCamera.transform.position=new Vector3(0,.7f,-10);
         var grid=Object.FindFirstObjectByType<InfiniteGrid>();
-        InfiniteGrid.Rebuild(grid.meshFilter.sharedMesh,demo.worldCamera,grid.spacing,grid.linePixels,grid.minorColor,grid.majorColor,grid.axisColor);
+        InfiniteGrid.Rebuild(grid.meshFilter.sharedMesh,demo.worldCamera,grid.spacing,grid.lineWidth,grid.minorColor,grid.majorColor,grid.axisColor);
         grid.transform.position=new Vector3(0,.7f,.4f);
         EditorUtility.SetDirty(grid.meshFilter.sharedMesh);
         EditorSceneManager.MarkSceneDirty(demo.gameObject.scene);EditorSceneManager.SaveScene(demo.gameObject.scene);AssetDatabase.SaveAssets();

@@ -75,6 +75,7 @@ public static class VerifyConvexHullDemo {
     public static string Interactions() {
         if(!Application.isPlaying)throw new Exception("Enter Play Mode first.");
         checks=0;var d=UnityEngine.Object.FindFirstObjectByType<ConvexHullDemoController>();
+        d.HideHelp();
         var camera=d.worldCamera;var start=camera.transform.position;
         bool enabled=d.enabled;d.enabled=false;
         try {
@@ -178,6 +179,7 @@ public static class VerifyConvexHullDemo {
     }
     public static async Task<string> InputFlow() {
         checks=0;var d=UnityEngine.Object.FindFirstObjectByType<ConvexHullDemoController>();
+        d.HideHelp();
         var camera=d.worldCamera;var start=camera.transform.position;
         try {
             d.ClearPoints();await Task.Delay(100);
@@ -214,8 +216,7 @@ public static class VerifyConvexHullDemo {
 
     public static async Task<object> MenuPreview() {
         var d=UnityEngine.Object.FindFirstObjectByType<ConvexHullDemoController>();
-        d.Toolbar.status.text="蓝色：凸包顶点    灰色：内部点    橙色外圈：选中点";
-        d.Toolbar.status.color=new Color(.40f,.48f,.58f,1);
+        d.HideHelp();
         d.OpenContextMenu(d.worldCamera.WorldToScreenPoint(d.Points[3].Position));
         Canvas.ForceUpdateCanvases();await Task.Delay(200);
         return new { selected=d.SelectedId,menu=d.IsMenuOpen,delete=d.Menu.HasDelete };
