@@ -620,6 +620,7 @@ GameObject:
   m_Component:
   - component: {fileID: 887081057}
   - component: {fileID: 887081056}
+  - component: {fileID: 887081058}
   m_Layer: 0
   m_Name: Convex Hull Demo
   m_TagString: Untagged
@@ -640,6 +641,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ConvexHullDemo.ConvexHullDemoController
   worldCamera: {fileID: 1425900544}
+  playback: {fileID: 887081058}
   uiSetting: {fileID: 11400000, guid: 6e0052f535dad4f94bad9ed409740e02, type: 2}
   pointPrefab: {fileID: 6572020698787198659, guid: 1cff88b76f81e4072919144a0d56b7e7, type: 3}
   pointsRoot: {fileID: 943372332}
@@ -700,8 +702,97 @@ Transform:
   - {fileID: 108906652}
   - {fileID: 591242818}
   - {fileID: 1928139332}
+  - {fileID: 891988595}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &887081058
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 887081055}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 397867b27dbc84f05855b63da7370f07, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ConvexHullDemo.HullAlgorithmPlayback
+  overlay: {fileID: 891988594}
+  stepInterval: 0.6
+  transitionDuration: 0.2
+--- !u!1001 &891988593
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 887081057}
+    m_Modifications:
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8692348472614391638, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+      propertyPath: m_Name
+      value: HullTeachingOverlay
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+--- !u!114 &891988594 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5503447635501774610, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+  m_PrefabInstance: {fileID: 891988593}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b801ec7d64ef48b5bad86376bb157f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ConvexHullDemo.HullTeachingOverlay
+--- !u!4 &891988595 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5705725693574617368, guid: 438dc8dc6b6ce4e2598e8e151f99dc48, type: 3}
+  m_PrefabInstance: {fileID: 891988593}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &943372331
 GameObject:
   m_ObjectHideFlags: 0

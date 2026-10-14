@@ -43,7 +43,7 @@ public static class VerifyCompactHullUI {
             await Click(UI(d.Help.closeButton));Check(!d.IsHelpOpen,"Help closes again");
             Check(d.pointDiameter>0&&d.hitRadius>=d.pointDiameter*.5f,"Larger point and hit area saved in scene");
             Check(d.Toolbar.toolbarRect.rect.height==64,"Compact toolbar height");
-            Check(d.Toolbar.toolbarRect.GetComponentsInChildren<Text>().Length==10,"Only 3 stats, input and two buttons remain");
+            Check(d.Toolbar.toolbarRect.GetComponentsInChildren<Text>().Length==11,"3 stats, input and random/clear/play buttons");
             var point=d.pointsRoot.GetChild(0);float radius=point.localScale.x;
             Vector2 center=d.worldCamera.WorldToScreenPoint(point.position);
             float actualDiameter=2*((Vector2)d.worldCamera.WorldToScreenPoint(point.position+Vector3.right*radius)-center).magnitude;

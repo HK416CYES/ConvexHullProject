@@ -26,7 +26,7 @@ public static class CompactHullUI {
         
         foreach(var view in demo.previewPoints)view.transform.localScale=Vector3.one*demo.pointDiameter*.5f;
         EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);AssetDatabase.SaveAssets();
-        return "Saved compact 900x64 toolbar, 160px context menu, world-unit points/hit radius, help panel and persistent toggle.";
+        return "Saved compact 1040x64 toolbar, 160px context menu, world-unit points/hit radius, help panel and persistent toggle.";
     }
     static void ClearChildren(Transform root){for(int i=root.childCount-1;i>=0;i--)Object.DestroyImmediate(root.GetChild(i).gameObject);}
     static void Toolbar(){
@@ -35,7 +35,7 @@ public static class CompactHullUI {
             ClearChildren(go.transform);var root=(RectTransform)go.transform;Stretch(root);
             var panel=go.GetComponent<HullToolbarPanel>();
             var bar=Rect("Toolbar",root);bar.anchorMin=bar.anchorMax=new Vector2(.5f,1);bar.pivot=new Vector2(.5f,1);
-            bar.anchoredPosition=new Vector2(0,-12);bar.sizeDelta=new Vector2(900,64);Image(bar,Color.white);Border(bar);
+            bar.anchoredPosition=new Vector2(0,-12);bar.sizeDelta=new Vector2(1040,64);Image(bar,Color.white);Border(bar);
             panel.toolbarRect=bar;
             panel.pointCount=Metric(bar,"点集",18,120);
             panel.hullCount=Metric(bar,"凸包顶点",145,130);
@@ -48,6 +48,9 @@ public static class CompactHullUI {
             panel.countInput.targetGraphic=input.GetComponent<Image>();panel.countInput.text="20";
             panel.randomButton=Button("Random",bar,"随机生成",605,17,125,30,Blue,Color.white);
             panel.clearButton=Button("Clear",bar,"清空点集",745,17,125,30,new Color(.92f,.95f,.98f),Ink);
+            panel.playButton=Button("Play algorithm",bar,"播放演示",890,17,125,30,Blue,Color.white);
+            panel.playbackMessage=Text("Playback message",root,"",0,82,1040,24,14,new Color(.8f,.2f,.16f),TextAnchor.MiddleCenter);
+            var message=panel.playbackMessage.rectTransform;message.anchorMin=message.anchorMax=new Vector2(.5f,1);message.pivot=new Vector2(.5f,1);message.anchoredPosition=new Vector2(0,-82);
             panel.helpButton=Button("Help",root,"?",0,0,36,36,Color.white,Blue);
             var question=(RectTransform)panel.helpButton.transform;question.anchorMin=question.anchorMax=Vector2.zero;
             question.pivot=Vector2.zero;question.anchoredPosition=new Vector2(16,16);Border(question);

@@ -5,8 +5,8 @@ using UnityEngine.UI;
 namespace ConvexHullDemo {
     public sealed class HullToolbarPanel : PanelController {
         public InputField countInput;
-        public Button randomButton, clearButton, helpButton;
-        public Text pointCount, hullCount, area;
+        public Button randomButton, clearButton, helpButton, playButton;
+        public Text pointCount, hullCount, area, playbackMessage;
         public RectTransform toolbarRect;
         private ConvexHullDemoController demo;
         private Camera uiCamera;
@@ -16,19 +16,33 @@ namespace ConvexHullDemo {
             demo = controller; demo.Changed += Refresh;
             uiCamera = GetComponentInParent<Canvas>().worldCamera;
             inputColor = countInput.image.color;
+            if (demo.playback != null) demo.playback.StateChanged += RefreshEditingState;
+            RefreshEditingState();
         }
         protected override void AddListeners() {
             randomButton.onClick.AddListener(Randomize);
+            if (playButton != null) playButton.onClick.AddListener(Play);
             clearButton.onClick.AddListener(Clear);
             helpButton.onClick.AddListener(ShowHelp);
             countInput.onValueChanged.AddListener(OnInputChanged);
         }
         protected override void RemoveListeners() {
             randomButton.onClick.RemoveListener(Randomize);
+            if (playButton != null) playButton.onClick.RemoveListener(Play);
+            if (demo != null && demo.playback != null) demo.playback.StateChanged -= RefreshEditingState;
             clearButton.onClick.RemoveListener(Clear);
             helpButton.onClick.RemoveListener(ShowHelp);
             countInput.onValueChanged.RemoveListener(OnInputChanged);
             if (demo != null) demo.Changed -= Refresh;
+        }
+        private void Play() {
+            if (demo == null || demo.playback == null) return;
+            demo.playback.Play(out var error);if (playbackMessage != null) playbackMessage.text = error;
+        }
+        private void RefreshEditingState() {
+            bool locked = demo != null && demo.IsPlayingAlgorithm;
+            countInput.interactable = randomButton.interactable = clearButton.interactable = !locked;
+            if (playButton != null) playButton.interactable = !locked;
         }
         public void Randomize() {
             if (demo == null) return;

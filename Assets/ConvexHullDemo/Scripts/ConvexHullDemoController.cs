@@ -14,6 +14,8 @@ namespace ConvexHullDemo {
         public const string HelpId = "HullHelp";
         [Header("Scene references")]
         public Camera worldCamera;
+        public HullAlgorithmPlayback playback;
+        public bool IsPlayingAlgorithm => playback != null && playback.IsActive;
         public UISetting uiSetting;
         public HullPointView pointPrefab;
         public Transform pointsRoot;
@@ -65,6 +67,7 @@ namespace ConvexHullDemo {
         private int nextId = 1;
         private int? selection;
         private bool dirty = true;
+        private bool playbackPresentationSuppressed, savedOutlineEnabled, savedFillEnabled;
         private bool leftActive, dragging;
         private int? dragPoint;
         private Vector2 leftStart, pointStart;
@@ -99,6 +102,7 @@ namespace ConvexHullDemo {
             toolbar = frame.GetComponentInChildren<HullToolbarPanel>(true);
             menu = frame.GetComponentInChildren<HullContextMenuPanel>(true);
             help = frame.GetComponentInChildren<HullHelpPanel>(true);
+            playback?.Bind(this, frame.GetComponentInChildren<HullPlaybackPanel>(true), frame);
             toolbar.Bind(this); menu.Bind(this, frame.UICamera); help.Bind(this);
             frame.ShowPanel(ToolbarId); toolbar.Refresh();
             if (HullHelpPanel.ShouldShowOnEntry) ShowHelp();
@@ -106,7 +110,7 @@ namespace ConvexHullDemo {
 
         private void Update() {
             var mouse = Mouse.current;
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { if (IsHelpOpen) HideHelp(); else CloseMenu(); }
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) { if (IsHelpOpen) HideHelp(); else if (IsPlayingAlgorithm) playback.Stop(); else CloseMenu(); }
             if (mouse == null) return;
             Vector2 screen = mouse.position.ReadValue();
             if (mouse.rightButton.wasPressedThisFrame) {
@@ -161,6 +165,7 @@ namespace ConvexHullDemo {
             return found;
         }
         public void Select(int? id) {
+            if (IsPlayingAlgorithm) return;
             selection = Find(id) != null ? id : null;
             UpdatePointAppearance(); Changed?.Invoke();
         }
@@ -171,7 +176,7 @@ namespace ConvexHullDemo {
             leftActive = true; dragging = false; leftStart = screen;
             cameraStart = worldCamera.transform.position;
             unitsPerPixelAtPress = 2 * worldCamera.orthographicSize / Mathf.Max(1, worldCamera.pixelHeight);
-            var hit = HitTest(screen);
+            var hit = IsPlayingAlgorithm ? null : HitTest(screen);
             dragPoint = hit.HasValue && hit == selection ? hit : null;
             if (dragPoint.HasValue) pointStart = Find(dragPoint).Position;
         }
@@ -186,13 +191,14 @@ namespace ConvexHullDemo {
         public void EndLeft(Vector2 screen) {
             if (!leftActive) return;
             MoveLeft(screen);
-            if (!dragging && !PointerOverUI(screen)) Select(HitTest(screen));
+            if (!IsPlayingAlgorithm && !dragging && !PointerOverUI(screen)) Select(HitTest(screen));
             leftActive = false; dragPoint = null;
         }
         private void OnApplicationFocus(bool focus) { if (!focus) CancelGesture(); }
         public void CancelGesture() { leftActive = false; dragging = false; dragPoint = null; }
 
         public void OpenContextMenu(Vector2 screen) {
+            if (IsPlayingAlgorithm) return;
             if (!worldCamera.pixelRect.Contains(screen)) return;
             CancelGesture();
             contextWorld = ScreenToWorld(screen); contextId = HitTest(screen);
@@ -202,6 +208,7 @@ namespace ConvexHullDemo {
             menu.PositionAt(screen);
         }
         public void ShowHelp() {
+            if (IsPlayingAlgorithm) playback.Pause();
             CloseMenu(); CancelGesture();
             help.SyncPreference(); frame.ShowPanel(HelpId);
         }
@@ -216,6 +223,7 @@ namespace ConvexHullDemo {
         }
 
         public Point AddPoint(Vector2 position) {
+            EnsureEditable();
             if (!Finite(position)) throw new ArgumentException("Point coordinates must be finite.");
             var view = pool.Count > 0 ? pool.Pop() : Instantiate(pointPrefab, pointsRoot);
             view.gameObject.SetActive(true);
@@ -227,6 +235,7 @@ namespace ConvexHullDemo {
             return point;
         }
         public void MovePoint(int id, Vector2 position) {
+            EnsureEditable();
             var point = Find(id);
             if (point == null || !Finite(position) || point.Position.Equals(position)) return;
             point.Position = position;
@@ -234,6 +243,7 @@ namespace ConvexHullDemo {
             dirty = true;
         }
         public void RemovePoint(int id) {
+            EnsureEditable();
             var point = Find(id);
             if (point == null) return;
             point.View.gameObject.SetActive(false); pool.Push(point.View); points.Remove(point);
@@ -241,10 +251,12 @@ namespace ConvexHullDemo {
             CancelGesture(); CloseMenu(); dirty = true;
         }
         public void ClearPoints() {
+            EnsureEditable();
             foreach (var p in points) { p.View.gameObject.SetActive(false); pool.Push(p.View); }
             points.Clear(); selection = null; CancelGesture(); CloseMenu(); dirty = true;
         }
         public bool Randomize(string input, out string error) {
+            if (IsPlayingAlgorithm) { error = "演示期间不能修改点集。"; return false; }
             int count;
             if (!int.TryParse(input, out count) || count < 1 || count > 1000) {
                 error = "请输入 1–1000 的整数，现有点集已保留。"; return false;
@@ -266,6 +278,9 @@ namespace ConvexHullDemo {
                 top = Mathf.Min(top, toolbar.ToolbarScreenBottom - 24);
             }
             return Rect.MinMaxRect(visible.xMin + 24, bottom, visible.xMax - 24, top);
+        }
+        private void EnsureEditable() {
+            if (IsPlayingAlgorithm) throw new InvalidOperationException("Point editing is locked during algorithm playback.");
         }
         private Point Find(int? id) => id.HasValue ? points.Find(p => p.Id == id.Value) : null;
         private static bool Finite(Vector2 p) => !float.IsNaN(p.x) && !float.IsInfinity(p.x) && !float.IsNaN(p.y) && !float.IsInfinity(p.y);
@@ -294,8 +309,23 @@ namespace ConvexHullDemo {
             var block = new MaterialPropertyBlock(); block.SetColor("_Color", fillColor); fillRenderer.SetPropertyBlock(block);
             UpdatePointAppearance(); Changed?.Invoke();
         }
+        // 演示只隐藏实时结果的渲染，不清空轮廓/网格，也不触发凸包重算。
+        internal void SetPlaybackPresentation(bool suppressed) {
+            if (playbackPresentationSuppressed == suppressed) return;
+            if (suppressed) {
+                savedOutlineEnabled = outline != null && outline.enabled;
+                savedFillEnabled = fillRenderer != null && fillRenderer.enabled;
+            }
+            playbackPresentationSuppressed = suppressed;
+            if (outline != null) outline.enabled = !suppressed && savedOutlineEnabled;
+            if (fillRenderer != null) fillRenderer.enabled = !suppressed && savedFillEnabled;
+            UpdatePointAppearance();
+        }
         private void UpdatePointAppearance() {
-            foreach (var p in points) p.View.SetAppearance(hullPositions.Contains(p.Position) ? hullColor : innerColor, selectionColor, p.Id == selection);
+            foreach (var p in points)
+                if (p.View != null && p.View.dot != null && p.View.selectionRing != null)
+                    p.View.SetAppearance(!playbackPresentationSuppressed && hullPositions.Contains(p.Position) ? hullColor : innerColor, selectionColor,
+                        p.Id == selection && !playbackPresentationSuppressed);
         }
         public void ApplyVisualSizes() {
             if (outline != null) outline.widthMultiplier = outlineWidth;
