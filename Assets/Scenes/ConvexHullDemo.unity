@@ -720,6 +720,7 @@ MonoBehaviour:
   overlay: {fileID: 891988594}
   stepInterval: 0.6
   transitionDuration: 0.2
+  granularity: 0
 --- !u!1001 &891988593
 PrefabInstance:
   m_ObjectHideFlags: 0

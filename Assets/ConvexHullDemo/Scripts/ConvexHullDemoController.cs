@@ -321,6 +321,17 @@ namespace ConvexHullDemo {
             if (fillRenderer != null) fillRenderer.enabled = !suppressed && savedFillEnabled;
             UpdatePointAppearance();
         }
+        // 只改变教学期间的点材质属性，不改点数据或触发实时凸包重算。
+        internal void ApplyTeachingGroups(HullTeachingSession session) {
+            if(!playbackPresentationSuppressed)return;
+            var colors=new Dictionary<Vector2,Color>();
+            for(int i=0;i<session.Unique.Count;i++)if(session.PointGroups[i]>=0)
+                colors[session.Unique[i]]=HullTeachingOverlay.ChanGroupColor(session.PointGroups[i]);
+            foreach(var p in points)if(p.View!=null) {
+                Color color;bool grouped=colors.TryGetValue(p.Position,out color);
+                p.View.SetAppearance(grouped?color:innerColor,selectionColor,false);
+            }
+        }
         private void UpdatePointAppearance() {
             foreach (var p in points)
                 if (p.View != null && p.View.dot != null && p.View.selectionRing != null)

@@ -26,7 +26,9 @@ public static class BuildHullPlayback {
         var demo=Object.FindFirstObjectByType<ConvexHullDemoController>();
         var player=demo.GetComponent<HullAlgorithmPlayback>();if(player==null)player=demo.gameObject.AddComponent<HullAlgorithmPlayback>();
         demo.playback=player;
-        if(player.overlay==null){var asset=Overlay();var instance=(GameObject)PrefabUtility.InstantiatePrefab(asset,scene);instance.transform.SetParent(demo.transform,false);player.overlay=instance.GetComponent<HullTeachingOverlay>();}
+        var asset=Overlay();
+        if(player.overlay==null){var instance=(GameObject)PrefabUtility.InstantiatePrefab(asset,scene);instance.transform.SetParent(demo.transform,false);player.overlay=instance.GetComponent<HullTeachingOverlay>();}
+        player.overlay.linePrefab=asset.GetComponent<HullTeachingOverlay>().linePrefab;EditorUtility.SetDirty(player.overlay);
         EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);AssetDatabase.SaveAssets();
         return "Saved standalone teaching overlay, play toolbar, playback UI panel, label prefab and scene bindings.";
     }
@@ -44,10 +46,20 @@ public static class BuildHullPlayback {
     static void Toolbar() {
         string path=Root+"/Prefabs/HullToolbar.prefab";var go=PrefabUtility.LoadPrefabContents(path);
         try {
-            var p=go.GetComponent<HullToolbarPanel>();p.toolbarRect.sizeDelta=new Vector2(1040,64);
+            var p=go.GetComponent<HullToolbarPanel>();p.toolbarRect.sizeDelta=new Vector2(1240,64);
             if(p.playButton==null)p.playButton=Button("Play algorithm",p.toolbarRect,"播放演示",890,17,125,30);
             if(p.playbackMessage==null){var t=Text("Playback message",go.transform,"",0,0,1040,24,14);p.playbackMessage=t;
                 t.color=new Color(.8f,.2f,.16f);var r=t.rectTransform;r.anchorMin=r.anchorMax=new Vector2(.5f,1);r.pivot=new Vector2(.5f,1);r.anchoredPosition=new Vector2(0,-82);t.alignment=TextAnchor.MiddleCenter;}
+            p.playButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(1090,-17);
+            if(p.algorithmDropdown==null){var dd=DefaultControls.CreateDropdown(new DefaultControls.Resources());dd.name="Teaching algorithm";dd.transform.SetParent(p.toolbarRect,false);p.algorithmDropdown=dd.GetComponent<Dropdown>();}
+            var dropdown=p.algorithmDropdown;var rect=dropdown.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=new Vector2(0,1);rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(884,-17);rect.sizeDelta=new Vector2(192,30);
+            dropdown.ClearOptions();dropdown.AddOptions(new System.Collections.Generic.List<string>(TeachingAlgorithmRegistry.Names));dropdown.value=0;dropdown.alphaFadeSpeed=0;
+            foreach(var child in dropdown.GetComponentsInChildren<Transform>(true))child.gameObject.layer=5;
+            foreach(var text in dropdown.GetComponentsInChildren<Text>(true)){text.font=font;text.fontSize=14;text.color=Ink;}
+            dropdown.captionText.rectTransform.offsetMin=new Vector2(8,0);dropdown.captionText.rectTransform.offsetMax=new Vector2(-24,0);
+            var arrow=dropdown.transform.Find("Arrow");arrow.GetComponent<Image>().enabled=false;
+            if(arrow.Find("Arrow symbol")==null){var t=Text("Arrow symbol",arrow,"▼",0,0,20,20,12);t.alignment=TextAnchor.MiddleCenter;}
+            dropdown.GetComponent<Image>().color=new Color(.92f,.95f,.99f);
             PrefabUtility.SaveAsPrefabAsset(go,path);
         }finally{PrefabUtility.UnloadPrefabContents(go);}
     }
@@ -83,8 +95,32 @@ public static class BuildHullPlayback {
         var root=new GameObject("Algorithm teaching overlay");var o=root.AddComponent<HullTeachingOverlay>();
         o.lower=Line("Lower chain",root.transform,material);o.upper=Line("Upper chain",root.transform,material);
         o.comparison=Line("Turn comparison",root.transform,material);o.transition=Line("Animated edge",root.transform,material);
-        o.candidateRing=Ring("Candidate marker",root.transform,material);o.removedRing=Ring("Removed marker",root.transform,material);
+        var template=Line("HullTeachingLine",null,material);var lineAsset=PrefabUtility.SaveAsPrefabAsset(template.gameObject,Root+"/Prefabs/HullTeachingLine.prefab");Object.DestroyImmediate(template.gameObject);o.linePrefab=lineAsset.GetComponent<LineRenderer>();
+        var marker=Ring("HullTeachingMarker",null,material);
+        var markerAsset=PrefabUtility.SaveAsPrefabAsset(marker.gameObject,Root+"/Prefabs/HullTeachingMarker.prefab");Object.DestroyImmediate(marker.gameObject);
+        var candidate=(GameObject)PrefabUtility.InstantiatePrefab(markerAsset,root.transform);candidate.name="Candidate marker";o.candidateRing=candidate.GetComponent<MeshRenderer>();o.confirmedMarkerPrefab=markerAsset.GetComponent<MeshRenderer>();o.triangleFillPrefab=TriangleFill();
+        var removed=(GameObject)PrefabUtility.InstantiatePrefab(markerAsset,root.transform);removed.name="Removed marker";o.removedRing=removed.GetComponent<MeshRenderer>();
         var asset=PrefabUtility.SaveAsPrefabAsset(root,Root+"/Prefabs/HullTeachingOverlay.prefab");Object.DestroyImmediate(root);return asset;
+    }
+    public static string RefreshQuickHullAssets() {
+        var scene=UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if(Application.isPlaying||scene.path!="Assets/Scenes/ConvexHullDemo.unity")throw new Exception("Expected stopped demo scene");
+        for(int i=0;i<UnityEngine.SceneManagement.SceneManager.sceneCount;i++)if(UnityEngine.SceneManagement.SceneManager.GetSceneAt(i).isDirty)throw new Exception("Preserve unsaved scenes");
+        var marker=AssetDatabase.LoadAssetAtPath<MeshRenderer>(Root+"/Prefabs/HullTeachingMarker.prefab");var fill=TriangleFill();
+        var path=Root+"/Prefabs/HullTeachingOverlay.prefab";var root=PrefabUtility.LoadPrefabContents(path);
+        try{var overlay=root.GetComponent<HullTeachingOverlay>();overlay.confirmedMarkerPrefab=marker;overlay.triangleFillPrefab=fill;PrefabUtility.SaveAsPrefabAsset(root,path);}
+        finally{PrefabUtility.UnloadPrefabContents(root);}
+        var live=Object.FindFirstObjectByType<HullTeachingOverlay>();live.confirmedMarkerPrefab=marker;live.triangleFillPrefab=fill;EditorUtility.SetDirty(live);
+        EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);AssetDatabase.SaveAssets();
+        return "Saved QuickHull triangle mesh/material/prefab and confirmed-point marker bindings";
+    }
+    static MeshRenderer TriangleFill() {
+        string meshPath=Root+"/Meshes/QuickHullTriangle.asset";var mesh=AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+        if(mesh==null){mesh=new Mesh{name="QuickHull triangle template"};mesh.vertices=new[]{Vector3.zero,Vector3.right,Vector3.up};mesh.triangles=new[]{0,1,2};mesh.colors=new[]{Color.white,Color.white,Color.white};mesh.RecalculateBounds();AssetDatabase.CreateAsset(mesh,meshPath);}
+        string materialPath=Root+"/Materials/QuickHullTriangle.mat";var material=AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+        if(material==null){material=new Material(Shader.Find("ConvexHullDemo/CanvasUnlit")){name="QuickHull triangle fill",renderQueue=3025};AssetDatabase.CreateAsset(material,materialPath);}
+        var root=new GameObject("HullQuickTriangleFill");root.AddComponent<MeshFilter>().sharedMesh=mesh;var renderer=root.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.shadowCastingMode=ShadowCastingMode.Off;root.SetActive(false);
+        var asset=PrefabUtility.SaveAsPrefabAsset(root,Root+"/Prefabs/HullQuickTriangleFill.prefab");Object.DestroyImmediate(root);return asset.GetComponent<MeshRenderer>();
     }
     static LineRenderer Line(string name,Transform parent,Material material) {
         var go=new GameObject(name);go.transform.SetParent(parent,false);var line=go.AddComponent<LineRenderer>();line.sharedMaterial=material;

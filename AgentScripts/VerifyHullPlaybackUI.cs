@@ -31,7 +31,7 @@ public static class VerifyHullPlaybackUI {
             bool paused=EditorApplication.isPaused;EditorApplication.isPaused=true;EditorApplication.Step();
             await Task.Delay(250);EditorApplication.isPaused=paused;Canvas.ForceUpdateCanvases();
             await Click(mouse,UI(panel.pauseButton));Assert(p.IsPaused,"Pause button input");
-            int index=p.StepIndex;await Click(mouse,UI(panel.nextButton));p.Tick(1);Assert(p.StepIndex==index+1&&p.IsPaused,"Next button input");
+            int index=p.StepIndex;await Click(mouse,UI(panel.nextButton));p.Tick(1);p.Tick(1);Assert(p.StepIndex==index+1&&p.IsPaused,"Next button input");
             await Click(mouse,UI(panel.speedDropdown));Canvas.ForceUpdateCanvases();EditorApplication.isPaused=true;EditorApplication.Step();await Task.Delay(200);EditorApplication.isPaused=false;
             var toggles=panel.speedDropdown.GetComponentsInChildren<Toggle>();Assert(toggles.Length==5,"Dropdown options visible");
             foreach(var t in panel.speedDropdown.GetComponentsInChildren<Transform>(true))
@@ -53,7 +53,7 @@ public static class VerifyHullPlaybackUI {
             EditorApplication.isPaused=true;EditorApplication.Step();await Task.Delay(200);Canvas.ForceUpdateCanvases();
             var d=UnityEngine.Object.FindFirstObjectByType<ConvexHullDemoController>();d.playback.Stop();d.HideHelp();
             if(!d.playback.Play(out var error))throw new Exception(error);d.playback.Pause();
-            for(int i=0;i<18;i++){d.playback.NextStep();d.playback.Tick(1);}
+            for(int i=0;i<18;i++){d.playback.NextStep();d.playback.Tick(1);d.playback.Tick(1);}
             EditorApplication.Step();await Task.Delay(200);Canvas.ForceUpdateCanvases();
             var panel=UnityEngine.Object.FindFirstObjectByType<HullPlaybackPanel>();var c=panel.GetComponentInParent<Canvas>();
             var corners=new Vector3[4];d.Toolbar.toolbarRect.GetWorldCorners(corners);

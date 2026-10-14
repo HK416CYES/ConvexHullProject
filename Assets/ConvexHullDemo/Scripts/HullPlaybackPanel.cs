@@ -11,6 +11,9 @@ namespace ConvexHullDemo {
         public Dropdown speedDropdown;
         private readonly List<Text> labels=new List<Text>();
         private IReadOnlyList<Vector2> positions;
+        private HullTeachingSession labelSession;
+        private bool labelsNumbered;
+        private int groupingRevision=-1;
         private HullAlgorithmPlayback playback;
         private Camera worldCamera,uiCamera;
         private static readonly float[] speeds={.25f,.5f,1,2,4};
@@ -35,23 +38,28 @@ namespace ConvexHullDemo {
             nextButton.interactable=playback.CanStep;
             int index=2;for(int i=0;i<speeds.Length;i++)if(Mathf.Approximately(speeds[i],playback.Speed))index=i;
             speedDropdown.SetValueWithoutNotify(index);
-        }
-        public void SetLabels(HullTeachingAlgorithm.Trace trace,bool deduplicated) {
-            positions=trace.Unique;
-            while(labels.Count<positions.Count){var label=Instantiate(labelPrefab,labelsRoot);label.gameObject.SetActive(true);labels.Add(label);}
-            int sortedIndex=0;
-            for(int i=0;i<labels.Count;i++) {
-                labels[i].gameObject.SetActive(i<positions.Count);if(i>=positions.Count)continue;
-                int start=sortedIndex;
-                while(sortedIndex<trace.Sorted.Count&&trace.Sorted[sortedIndex].Equals(positions[i]))sortedIndex++;
-                labels[i].text=deduplicated?(i+1).ToString():sortedIndex-start>1?(start+1)+"–"+sortedIndex:(start+1).ToString();
-            }
             UpdateLabels();
         }
-        public void ClearLabels(){positions=null;foreach(var label in labels)if(label!=null)label.gameObject.SetActive(false);}
+        public void SetLabels(HullTeachingSession trace) {
+            positions=trace.Unique;labelSession=trace;labelsNumbered=false;groupingRevision=-1;
+            while(labels.Count<positions.Count){var label=Instantiate(labelPrefab,labelsRoot);label.gameObject.SetActive(true);labels.Add(label);}
+            // 对象池只复用 Text，不复用上一场演示的号码。
+            for(int i=0;i<labels.Count;i++){labels[i].gameObject.SetActive(false);labels[i].text="";}
+            UpdateLabels();
+        }
+        public void ClearLabels(){positions=null;labelSession=null;labelsNumbered=false;foreach(var label in labels)if(label!=null)label.gameObject.SetActive(false);}
         private void LateUpdate(){UpdateLabels();}
         private void UpdateLabels() {
-            if(positions==null)return;
+            if(positions==null||labelSession==null||!labelSession.NumberingReady)return;
+            if(!labelsNumbered||groupingRevision!=labelSession.GroupingRevision) {
+                for(int i=0;i<positions.Count;i++) {
+                    int group=labelSession.PointGroups[i];
+                    labels[i].text=labelSession.DisplayNumbers[i].ToString()+(group>=0?"·组"+(group+1):"");
+                    labels[i].color=group>=0?HullTeachingOverlay.ChanGroupColor(group):labelPrefab.color;
+                }
+                groupingRevision=labelSession.GroupingRevision;
+                labelsNumbered=true;
+            }
             for(int i=0;i<positions.Count;i++) {
                 Vector2 screen=worldCamera.WorldToScreenPoint(positions[i]+new Vector2(.25f,.35f));
                 bool visible=worldCamera.pixelRect.Contains(screen);labels[i].gameObject.SetActive(visible);if(!visible)continue;

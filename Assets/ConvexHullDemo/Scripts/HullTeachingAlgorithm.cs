@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace ConvexHullDemo {
-    /// <summary>教学用独立算法。只处理传入快照，不调用实时 ConvexHull2D，也不修改场景点。</summary>
+    /// <summary>历史 Andrew 记录器，仅供旧版回归验证。场景播放统一使用 HullTeachingSession 流式会话，不预存步骤。</summary>
     public static class HullTeachingAlgorithm {
         public enum Action { Sort, Deduplicate, BeginLower, BeginUpper, Candidate, Check, Add, Remove, Finish }
         public struct Step {

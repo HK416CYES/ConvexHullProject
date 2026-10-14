@@ -12,7 +12,14 @@ namespace ConvexHullDemo {
         private ConvexHullDemoController demo;
         private HullPlaybackPanel panel;
         private UIFrame frame;
-        private HullTeachingAlgorithm.Trace trace;
+        [Tooltip("关键步骤只显示有效变化；详细步骤额外显示每次几何比较。")]
+        public TeachingGranularity granularity=TeachingGranularity.KeySteps;
+        private HullTeachingSession trace;
+        private TeachingEvent current;
+        private bool waiting;
+        public TeachingAlgorithmKind SelectedAlgorithm{get;private set;}
+        public TeachingAlgorithmKind ActiveAlgorithm=>trace==null?SelectedAlgorithm:trace.Algorithm;
+        public bool SelectAlgorithm(TeachingAlgorithmKind kind){if(IsActive)return false;SelectedAlgorithm=kind;StateChanged?.Invoke();return true;}
         private float elapsed;
         private bool stepping;
         public bool IsActive=>trace!=null;
@@ -20,8 +27,9 @@ namespace ConvexHullDemo {
         public bool CanStep=>IsActive&&IsPaused&&!stepping;
         public float Speed{get;private set;}=1;
         public int StepIndex{get;private set;}
-        public int StepCount=>trace==null?0:trace.Steps.Count;
-        public HullTeachingAlgorithm.Trace CurrentTrace=>trace;
+        public int StepCount=>IsActive?-1:0; // 流式算法尚未结束时，总步数未知。
+        public HullTeachingSession CurrentTrace=>trace;
+        public TeachingEvent CurrentEvent=>current;
         public event Action StateChanged;
         public void Bind(ConvexHullDemoController owner,HullPlaybackPanel ui,UIFrame uiFrame) {
             demo=owner;panel=ui;frame=uiFrame;panel.Bind(this,demo.worldCamera,frame.UICamera);
@@ -33,13 +41,14 @@ namespace ConvexHullDemo {
             // 先检查可取景性；失败时不能改变相机或已有显示。
             Canvas.ForceUpdateCanvases();
             if(!TryFit(snapshot,out var size,out var position)){error="凸包过大，无法演示";return false;}
-            var recording=HullTeachingAlgorithm.Record(snapshot);
+            var teachingPoints=new List<TeachingPoint>();foreach(var p in demo.Points)teachingPoints.Add(new TeachingPoint(p.Id,p.Position));
+            var recording=TeachingAlgorithmRegistry.Create(SelectedAlgorithm,teachingPoints,granularity);
             demo.CancelGesture();demo.CloseMenu();demo.HideHelp();
             demo.worldCamera.orthographicSize=size;demo.worldCamera.transform.position=position;
-            trace=recording;IsPaused=false;stepping=false;Speed=1;StepIndex=0;elapsed=0;
+            trace=recording;IsPaused=false;stepping=false;Speed=1;StepIndex=-1;elapsed=0;waiting=true;current=null;
             demo.SetPlaybackPresentation(true);
-            overlay.ResetTrace(trace);frame.ShowPanel(PanelId);panel.SetLabels(trace,false);
-            BeginStep();StateChanged?.Invoke();return true;
+            overlay.ResetSession(trace);frame.ShowPanel(PanelId);panel.SetLabels(trace);
+            Pump();StateChanged?.Invoke();return true;
         }
         private bool TryFit(List<Vector2> points,out float size,out Vector3 position) {
             var camera=demo.worldCamera;position=camera.transform.position;size=camera.orthographicSize;
@@ -49,7 +58,8 @@ namespace ConvexHullDemo {
             Rect usable=Rect.MinMaxRect(view.xMin+margin,view.yMin+(panel.card.rect.height+12)*scale+margin,
                 view.xMax-margin,Mathf.Min(view.yMax-margin,demo.Toolbar.ToolbarScreenBottom-margin));
             if(usable.width<=0||usable.height<=0)return false;
-            float worldMargin=Mathf.Max(.5f,Mathf.Max(demo.pointDiameter*.9f,overlay.ringDiameter*.5f)+.5f);
+            float markerDiameter=SelectedAlgorithm==TeachingAlgorithmKind.QuickHull?Mathf.Max(overlay.ringDiameter,overlay.confirmedPointDiameter):overlay.ringDiameter;
+            float worldMargin=Mathf.Max(.5f,Mathf.Max(demo.pointDiameter*.9f,markerDiameter*.5f)+.5f);
             Vector2 span=max-min+Vector2.one*worldMargin*2;
             float required=Mathf.Max(span.y/(2*usable.height/view.height),span.x/(2*camera.aspect*usable.width/view.width));
             if(required>demo.maxZoomSize)return false;
@@ -60,58 +70,52 @@ namespace ConvexHullDemo {
             position=new Vector3(center.x-offset.x,center.y-offset.y,camera.transform.position.z);return true;
         }
         private void Update(){Tick(Time.unscaledDeltaTime);}
+        private float CurrentStepInterval {
+            get {
+                float interval=Mathf.Max(.05f,stepInterval);
+                // Chan 只缩短重复构造/查询步骤的自动停留；分组、组完成和重试仍停留完整间隔。
+                // 暂停单步和详细模式保留原节奏，不牺牲可逐步检查的能力。
+                if(trace!=null&&trace.Algorithm==TeachingAlgorithmKind.Chan&&trace.Granularity==TeachingGranularity.KeySteps&&!IsPaused&&current!=null&&
+                   current.Operation!=TeachingOperation.Restart&&current.Operation!=TeachingOperation.ChanPartition&&
+                   current.Operation!=TeachingOperation.ChanBuildStart&&current.Operation!=TeachingOperation.ChanGroupComplete&&
+                   current.Operation!=TeachingOperation.Stage&&current.Operation!=TeachingOperation.Finish)
+                    interval=Mathf.Max(.016f,interval*.35f*Mathf.Min(1,20f/Mathf.Max(1,trace.Unique.Count)));
+                return interval;
+            }
+        }
         public void Tick(float seconds) {
             if(!IsActive||(IsPaused&&!stepping))return;
+            if(waiting){Pump();return;}
             elapsed+=Mathf.Max(0,seconds)*Speed;
-            overlay.Draw(Mathf.Clamp01(elapsed/Mathf.Max(.01f,Mathf.Min(transitionDuration,stepInterval))));
-            if(elapsed<Mathf.Max(.05f,stepInterval))return;
-            if(stepping){stepping=false;elapsed=stepInterval;StateChanged?.Invoke();}
-            else Advance();
+            overlay.Draw(Mathf.Clamp01(elapsed/Mathf.Max(.01f,Mathf.Min(transitionDuration,CurrentStepInterval))));
+            if(elapsed<CurrentStepInterval)return;
+            if(current.Operation==TeachingOperation.Finish){Stop();return;}
+            if(stepping){stepping=false;StateChanged?.Invoke();return;}
+            waiting=true;Pump();
         }
         public void TogglePause(){if(!IsActive)return;IsPaused=!IsPaused;stepping=false;StateChanged?.Invoke();}
         public void Pause(){if(!IsActive)return;IsPaused=true;stepping=false;StateChanged?.Invoke();}
         public void NextStep() {
-            if(!IsActive||!IsPaused||stepping)return;
-            overlay.Draw(1);Advance();if(IsActive){stepping=true;StateChanged?.Invoke();}
+            if(!CanStep)return;
+            overlay.Draw(1);
+            if(current!=null&&current.Operation==TeachingOperation.Finish){Stop();return;}
+            waiting=true;stepping=true;elapsed=0;StateChanged?.Invoke();
         }
-        public void SetSpeed(float value) {Speed=Mathf.Clamp(value,.25f,4);StateChanged?.Invoke();}
-        private void Advance(){
-            if(StepIndex+1>=trace.Steps.Count){Stop();return;}
-            StepIndex++;elapsed=0;BeginStep();StateChanged?.Invoke();
+        public void SetSpeed(float value){Speed=Mathf.Clamp(value,.25f,4);StateChanged?.Invoke();}
+        private void Pump(){
+            // 一次 Update 只取一个可见事件，至多预留 4096 次比较。Pending 不改变当前画面。
+            var status=trace.Advance(4096,out var next);
+            if(status==TeachingAdvance.Complete){Stop();return;}
+            if(status==TeachingAdvance.Pending)return;
+            current=next;StepIndex++;waiting=false;elapsed=0;overlay.Begin(current);
+            if(trace.Algorithm==TeachingAlgorithmKind.Chan&&(current.Operation==TeachingOperation.ChanGroups||current.Operation==TeachingOperation.ChanPartition||current.Operation==TeachingOperation.Restart))demo.ApplyTeachingGroups(trace);
+            panel.Refresh();StateChanged?.Invoke();
         }
-        private void BeginStep(){
-            var step=trace.Steps[StepIndex];overlay.Begin(step);
-            if(step.Kind==HullTeachingAlgorithm.Action.Deduplicate)panel.SetLabels(trace,true);
-            panel.Refresh();
-        }
-        public string Phase {
-            get {
-                if(!IsActive)return "";var s=trace.Steps[StepIndex];
-                if(s.Kind==HullTeachingAlgorithm.Action.Sort)return "排序";
-                if(s.Kind==HullTeachingAlgorithm.Action.Deduplicate)return "去重";
-                if(s.Kind==HullTeachingAlgorithm.Action.Finish)return "完成";
-                return s.Upper?"上链 · 绿色":"下链 · 蓝色";
-            }
-        }
-        public string Explanation {
-            get {
-                if(!IsActive)return "";var s=trace.Steps[StepIndex];int n=s.Point+1;
-                switch(s.Kind) {
-                    case HullTeachingAlgorithm.Action.Sort:return "按 x、再按 y 排序；编号表示从左到右的处理顺序";
-                    case HullTeachingAlgorithm.Action.Deduplicate:return "合并重复坐标："+trace.Sorted.Count+" 个点 → "+trace.Unique.Count+" 个不同坐标（原始点不变）";
-                    case HullTeachingAlgorithm.Action.BeginLower:return "从左向右扫描，构造下边界";
-                    case HullTeachingAlgorithm.Action.BeginUpper:return "保留下链，从右向左扫描，构造上边界";
-                    case HullTeachingAlgorithm.Action.Candidate:return "考察点 "+n+"，检查它与链末尾两点的转向";
-                    case HullTeachingAlgorithm.Action.Check:return "点 "+(s.A+1)+" → "+(s.B+1)+" → "+n+"：叉积 "+s.Cross.ToString("G5",System.Globalization.CultureInfo.InvariantCulture)+"，"+(s.Cross>0?"左转，保留":s.Cross<0?"右转，移除链末尾点":"共线，移除中间点");
-                    case HullTeachingAlgorithm.Action.Add:return "将点 "+n+" 加入候选链";
-                    case HullTeachingAlgorithm.Action.Remove:return "移除候选链末尾的点 "+n+"；该点仍可能属于另一条链";
-                    default:return "连接上下链并去除重复端点：得到 "+trace.Hull.Count+" 个凸包顶点";
-                }
-            }
-        }
+        public string Phase=>current?.Phase??"";
+        public string Explanation=>current==null?"":current.Operation.ToString();
         public void Stop() {Stop(true);}
         private void Stop(bool notifyUI) {
-            if(!IsActive)return;trace=null;stepping=false;IsPaused=false;
+            if(!IsActive)return;trace.Dispose();trace=null;current=null;waiting=false;stepping=false;IsPaused=false;
             if(overlay!=null)overlay.Clear();if(panel!=null)panel.ClearLabels();
             if(demo!=null)demo.SetPlaybackPresentation(false);
             if(notifyUI) {

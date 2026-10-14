@@ -8,6 +8,7 @@ namespace ConvexHullDemo {
         public Button randomButton, clearButton, helpButton, playButton;
         public Text pointCount, hullCount, area, playbackMessage;
         public RectTransform toolbarRect;
+        public Dropdown algorithmDropdown;
         private ConvexHullDemoController demo;
         private Camera uiCamera;
         private Color inputColor;
@@ -22,6 +23,7 @@ namespace ConvexHullDemo {
         protected override void AddListeners() {
             randomButton.onClick.AddListener(Randomize);
             if (playButton != null) playButton.onClick.AddListener(Play);
+            if(algorithmDropdown!=null)algorithmDropdown.onValueChanged.AddListener(SelectAlgorithm);
             clearButton.onClick.AddListener(Clear);
             helpButton.onClick.AddListener(ShowHelp);
             countInput.onValueChanged.AddListener(OnInputChanged);
@@ -29,12 +31,14 @@ namespace ConvexHullDemo {
         protected override void RemoveListeners() {
             randomButton.onClick.RemoveListener(Randomize);
             if (playButton != null) playButton.onClick.RemoveListener(Play);
+            if(algorithmDropdown!=null)algorithmDropdown.onValueChanged.RemoveListener(SelectAlgorithm);
             if (demo != null && demo.playback != null) demo.playback.StateChanged -= RefreshEditingState;
             clearButton.onClick.RemoveListener(Clear);
             helpButton.onClick.RemoveListener(ShowHelp);
             countInput.onValueChanged.RemoveListener(OnInputChanged);
             if (demo != null) demo.Changed -= Refresh;
         }
+        private void SelectAlgorithm(int index){if(demo!=null&&demo.playback!=null)demo.playback.SelectAlgorithm((TeachingAlgorithmKind)index);}
         private void Play() {
             if (demo == null || demo.playback == null) return;
             demo.playback.Play(out var error);if (playbackMessage != null) playbackMessage.text = error;
@@ -43,6 +47,7 @@ namespace ConvexHullDemo {
             bool locked = demo != null && demo.IsPlayingAlgorithm;
             countInput.interactable = randomButton.interactable = clearButton.interactable = !locked;
             if (playButton != null) playButton.interactable = !locked;
+            if(algorithmDropdown!=null){algorithmDropdown.interactable=!locked;if(demo!=null)algorithmDropdown.SetValueWithoutNotify((int)demo.playback.SelectedAlgorithm);}
         }
         public void Randomize() {
             if (demo == null) return;
